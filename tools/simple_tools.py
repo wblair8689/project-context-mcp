@@ -1,5 +1,5 @@
 """
-Simplified 4-command MCP tools for Xcode integration
+Simplified 4-command MCP tools for Xcode integration + Project Management
 """
 import json
 import subprocess
@@ -15,12 +15,160 @@ except ImportError:
 
 
 def register_tools(server):
-    """Register the 4 essential tools with the server"""
+    """Register the essential tools with the server"""
+    
+    @server.mcp.tool()
+    async def list_projects() -> str:
+        """List all registered projects and show current project selection"""
+        try:
+            if not hasattr(server, 'project_registry'):
+                return json.dumps({
+                    "error": "Project registry not initialized",
+                    "suggestion": "Server needs to be restarted with project registry support"
+                }, indent=2)
+            
+            projects = server.project_registry.list_projects()
+            current = server.project_registry.get_current_project()
+            
+            if not projects:
+                # Auto-discover some projects
+                discovered = server.project_registry.auto_discover_projects()
+                
+                return json.dumps({
+                    "status": "no_projects_registered",
+                    "message": "No projects registered yet",
+                    "current_project": None,
+                    "discovered_projects": discovered[:5],  # Show first 5
+                    "actions": [
+                        "Use add_project() to register a project",
+                        "Use select_project() to choose from discovered projects",
+                        "Use auto_register_projects() to register discovered projects"
+                    ]
+                }, indent=2)
+            
+            return json.dumps({
+                "status": "success",
+                "current_project": current,
+                "registered_projects": projects,
+                "total_projects": len(projects),
+                "actions": [
+                    "Use select_project(name) to switch projects",
+                    "Use add_project() to register new projects",
+                    "Use remove_project(name) to remove projects"
+                ]
+            }, indent=2)
+            
+        except Exception as e:
+            return f"Error listing projects: {str(e)}"
+    
+    @server.mcp.tool()
+    async def select_project(project_name: str) -> str:
+        """Select and switch to a specific project"""
+        try:
+            if not hasattr(server, 'project_registry'):
+                return json.dumps({
+                    "error": "Project registry not initialized"
+                }, indent=2)
+            
+            # Check if project exists
+            project = server.project_registry.get_project(project_name)
+            if not project:
+                available = [p["name"] for p in server.project_registry.list_projects()]
+                return json.dumps({
+                    "status": "error",
+                    "message": f"Project '{project_name}' not found",
+                    "available_projects": available,
+                    "suggestion": "Use list_projects() to see available projects"
+                }, indent=2)
+            
+            # Set as current project
+            success = server.project_registry.set_current_project(project_name)
+            
+            if success:
+                # Update server's project root
+                server.project_root = project["path"]
+                # Reinitialize checkers for new project
+                server._reinitialize_for_project(project["path"])
+                
+                return json.dumps({
+                    "status": "success",
+                    "message": f"Switched to project: {project_name}",
+                    "project_path": project["path"],
+                    "xcode_enabled": project.get("xcode_enabled", True),
+                    "next_action": "Use get_project_status() to check project health"
+                }, indent=2)
+            else:
+                return json.dumps({
+                    "status": "error",
+                    "message": "Failed to switch project"
+                }, indent=2)
+            
+        except Exception as e:
+            return f"Error selecting project: {str(e)}"
+    
+    @server.mcp.tool()
+    async def add_project(name: str, path: str, description: str = "", 
+                         project_type: str = "general", xcode_enabled: bool = True) -> str:
+        """Add a new project to the registry"""
+        try:
+            if not hasattr(server, 'project_registry'):
+                return json.dumps({
+                    "error": "Project registry not initialized"
+                }, indent=2)
+            
+            success = server.project_registry.add_project(
+                name=name,
+                path=path,
+                description=description,
+                project_type=project_type,
+                xcode_enabled=xcode_enabled
+            )
+            
+            if success:
+                return json.dumps({
+                    "status": "success",
+                    "message": f"Project '{name}' added successfully",
+                    "project": {
+                        "name": name,
+                        "path": path,
+                        "description": description,
+                        "project_type": project_type,
+                        "xcode_enabled": xcode_enabled
+                    },
+                    "next_action": f"Use select_project('{name}') to switch to this project"
+                }, indent=2)
+            else:
+                return json.dumps({
+                    "status": "error",
+                    "message": f"Failed to add project '{name}' - path may not exist"
+                }, indent=2)
+            
+        except Exception as e:
+            return f"Error adding project: {str(e)}"
     
     @server.mcp.tool()
     async def get_project_status() -> str:
         """Get unified project status: build state, errors/warnings, project health, and blockers"""
         try:
+            # Check if we have project registry and current project
+            if hasattr(server, 'project_registry'):
+                current = server.project_registry.get_current_project()
+                if not current:
+                    projects = server.project_registry.list_projects()
+                    if not projects:
+                        return json.dumps({
+                            "status": "no_project_selected",
+                            "message": "No project selected and no projects registered",
+                            "action_needed": "Use list_projects() to see available projects or add_project() to register one"
+                        }, indent=2)
+                    else:
+                        return json.dumps({
+                            "status": "no_project_selected", 
+                            "message": "No project currently selected",
+                            "available_projects": [p["name"] for p in projects[:5]],
+                            "action_needed": "Use select_project(name) to choose a project"
+                        }, indent=2)
+            
             # Get comprehensive status from all checkers
             infrastructure = server.infrastructure_checker.get_infrastructure_status()
             implementation = server.swift_checker.get_swift_project_status() if server.swift_checker else {
@@ -56,10 +204,22 @@ def register_tools(server):
                 if "❌" in status:
                     blockers.append(f"{component.replace('_', ' ')} not ready")
             
+            # Get current project info if available
+            current_project_info = {}
+            if hasattr(server, 'project_registry'):
+                current = server.project_registry.get_current_project()
+                if current:
+                    current_project_info = {
+                        "selected_project": current["name"],
+                        "project_path": current["path"],
+                        "selected_at": current.get("set_at")
+                    }
+            
             status = {
-                "project_name": server.config.get("project_name", "AI Game Evolution Platform"),
+                "project_name": server.config.get("project_name", "Unknown Project"),
                 "current_phase": server.config.get("current_phase", "Development"),
                 "overall_readiness": overall_readiness,
+                **current_project_info,
                 "build_health": {
                     "status": "🟢 Healthy" if len(errors) == 0 else "🔴 Issues detected",
                     "errors": len(errors),

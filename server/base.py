@@ -13,6 +13,7 @@ from build_diagnostics import BuildDiagnosticsDB
 from build_awareness import BuildAwarenessManager
 from diagnostics_seeder import seed_known_solutions
 from xcode_runtime_monitor import XcodeRuntimeMonitor
+from project_registry import ProjectRegistry
 
 from utils.config_utils import load_config
 from utils.file_utils import should_ignore_file, get_all_project_files, analyze_project_structure
@@ -48,11 +49,39 @@ class UnifiedProjectContextServer:
         self.config_path.mkdir(parents=True, exist_ok=True)
         self.data_path.mkdir(parents=True, exist_ok=True)
 
+        # Initialize project registry
+        self.project_registry = ProjectRegistry(self.data_path)
+        
+        # Check if we have a current project or should use the provided root
+        current_project = self.project_registry.get_current_project()
+        if current_project and Path(current_project["path"]).exists():
+            self.project_root = Path(current_project["path"])
+            logging.info(f"Using current project: {current_project['name']} at {self.project_root}")
+        else:
+            # Add current project to registry if not present
+            project_name = Path(project_root).name
+            self.project_registry.add_project(
+                name=project_name,
+                path=project_root,
+                description=f"Auto-registered project: {project_name}",
+                project_type="auto-detected"
+            )
+            self.project_registry.set_current_project(project_name)
+            logging.info(f"Auto-registered and selected project: {project_name}")
+
         # Load configuration
         self.config = load_config(self.config_path)
         
         # Check if Xcode monitoring is enabled
         self.xcode_enabled = self.config.get("xcode_monitoring", {}).get("enabled", True)
+        
+        # Initialize for current project
+        self._reinitialize_for_project(str(self.project_root))
+            logging.info("Xcode monitoring disabled by configuration")
+    
+    def _reinitialize_for_project(self, project_path: str):
+        """Reinitialize checkers and components for a new project"""
+        self.project_root = Path(project_path)
         
         # Initialize checkers
         self.infrastructure_checker = InfrastructureChecker(self.project_root)
@@ -60,7 +89,7 @@ class UnifiedProjectContextServer:
         
         # Swift monitoring attributes (only if Xcode enabled)
         if self.xcode_enabled:
-            self.swift_project_path = project_root
+            self.swift_project_path = project_path
             self.swift_checker = SwiftProjectChecker(self.project_root)
             
             # Initialize build diagnostics database
