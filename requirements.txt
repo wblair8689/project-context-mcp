@@ -1,0 +1,29 @@
+# Project Context MCP Server Dependencies
+
+# MCP (Model Context Protocol)
+mcp>=1.0.0
+
+# Core dependencies
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+starlette>=0.27.0
+
+# File watching and git integration
+watchdog>=3.0.0
+GitPython>=3.1.0
+
+# Data handling
+sqlite3  # Built-in Python module
+aiofiles>=23.0.0
+
+# Utilities
+python-dateutil>=2.8.0
+pathlib  # Built-in Python module
+typing-extensions>=4.8.0
+
+# Development and testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+mypy>=1.6.0

@@ -1,0 +1,17 @@
+{
+  "project_name": "AI Game Evolution Platform",
+  "current_phase": "Phase 1: Foundation & Integration",
+  "active_feature_group": "unified_context_mcp",
+  "feature_groups": [
+    "project_context_mcp",
+    "genetic_evolution",
+    "ai_agents",
+    "image_generation",
+    "ios_game_engine"
+  ],
+  "update_schedule": {
+    "infrastructure_check": 3600,
+    "git_status_check": 300,
+    "feature_rotation": 86400
+  }
+}
