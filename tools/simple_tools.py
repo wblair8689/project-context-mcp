@@ -1,5 +1,12 @@
 """
 Simplified 4-command MCP tools for Xcode integration + Project Management
+
+⚡ EFFICIENCY PHILOSOPHY:
+These tools include reminders for the AI caller to update project context
+instead of asking users to update it. This saves time and maintains context
+across conversations, making development sessions much more efficient.
+
+The AI should proactively use store_context() to track progress and milestones.
 """
 import json
 import subprocess
@@ -95,7 +102,8 @@ def register_tools(server):
                     "message": f"Switched to project: {project_name}",
                     "project_path": project["path"],
                     "xcode_enabled": project.get("xcode_enabled", True),
-                    "next_action": "Use get_project_status() to check project health"
+                    "next_action": "Use get_project_status() to check project health",
+                    "reminder": "💡 Remember to update project context with store_context() as you make progress to save time in future conversations"
                 }, indent=2)
             else:
                 return json.dumps({
@@ -135,7 +143,8 @@ def register_tools(server):
                         "project_type": project_type,
                         "xcode_enabled": xcode_enabled
                     },
-                    "next_action": f"Use select_project('{name}') to switch to this project"
+                    "next_action": f"Use select_project('{name}') to switch to this project",
+                    "reminder": "💡 Use store_context() to track your progress on this project and save time in future conversations"
                 }, indent=2)
             else:
                 return json.dumps({
@@ -234,7 +243,8 @@ def register_tools(server):
                     "clean": not git_status.get("is_dirty", True),
                     "last_commit": git_status.get("last_commit", {}).get("message", "Unknown")[:50]
                 },
-                "next_action": "Fix build errors" if errors else "Run build to verify status"
+                "next_action": "Fix build errors" if errors else "Run build to verify status",
+                "reminder": "💡 As you work on this project, consider using store_context() to track progress and save time in future conversations"
             }
             
             return json.dumps(status, indent=2)
@@ -318,7 +328,8 @@ def register_tools(server):
                             "warnings": len(new_warnings),
                             "message": f"Build {'succeeded' if not new_errors else 'failed'} with {len(new_errors)} errors, {len(new_warnings)} warnings",
                             "top_errors": [e['message'][:100] for e in new_errors[:3]],
-                            "suggestion": "Use get_diagnostics() to see detailed error information" if new_errors else "Build completed successfully"
+                            "suggestion": "Use get_diagnostics() to see detailed error information" if new_errors else "Build completed successfully",
+                            "reminder": "💡 Consider updating project context with store_context() after significant build milestones"
                     }, indent=2)
             
             # If no diagnostics found, return basic status
@@ -327,7 +338,8 @@ def register_tools(server):
                 "status": "triggered",
                 "build_time": f"{build_time:.1f}s",
                 "message": "Build triggered successfully",
-                "suggestion": "Use get_diagnostics() in a few moments to check for any issues"
+                "suggestion": "Use get_diagnostics() in a few moments to check for any issues",
+                "reminder": "💡 Consider updating project context with store_context() after significant build milestones"
             }, indent=2)
             
         except Exception as e:
@@ -471,7 +483,8 @@ def register_tools(server):
                     "Run build() to verify the fix",
                     "Check get_diagnostics() for updated status"
                 ],
-                "message": f"Fix recorded for error: {error_message[:50]}..."
+                "message": f"Fix recorded for error: {error_message[:50]}...",
+                "reminder": "💡 After successful fixes, consider updating project context with store_context() to track progress"
             }
             
             # Trigger a build after a short delay to verify the fix
@@ -542,7 +555,8 @@ def register_tools(server):
                     "status": "Clean" if not git_status.get("is_dirty", True) else "Has changes",
                     "last_commit": git_status.get("last_commit", {}).get("message", "Unknown")[:60]
                 },
-                "next_focus": server._get_suggested_next_steps()[:3]
+                "next_focus": server._get_suggested_next_steps()[:3],
+                "context_reminder": "💡 Use store_context() regularly to save progress and improve future conversation efficiency"
             }
             
             return json.dumps(context, indent=2)
@@ -591,7 +605,8 @@ def register_tools(server):
                 "status": "success",
                 "old_phase": old_phase,
                 "new_phase": new_phase,
-                "message": f"✅ Project phase updated to: {new_phase}"
+                "message": f"✅ Project phase updated to: {new_phase}",
+                "reminder": "💡 Continue using store_context() to track progress within this new phase"
             }, indent=2)
             
         except Exception as e:
@@ -633,7 +648,8 @@ def register_tools(server):
                 "status": "success",
                 "message": "✅ Context stored successfully",
                 "stored_note": context_note[:100] + "..." if len(context_note) > 100 else context_note,
-                "total_contexts": len(contexts)
+                "total_contexts": len(contexts),
+                "tip": "💡 Keep updating context as you work - it makes future conversations much more efficient!"
             }, indent=2)
             
         except Exception as e:
@@ -687,7 +703,8 @@ def register_tools(server):
                     }
                     for note in dev_notes[-5:]  # Last 5 development notes
                 ],
-                "suggestion": "Use store_context() to add new development notes"
+                "suggestion": "Use store_context() to add new development notes",
+                "efficiency_tip": "💡 Regular context updates help AI assistants provide better, more targeted help in future conversations"
             }
             
             return json.dumps(result, indent=2)
